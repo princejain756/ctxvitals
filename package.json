@@ -1,0 +1,40 @@
+{
+  "name": "agentvitals",
+  "version": "0.1.0",
+  "description": "Vitals check for your AI agent stack: measures the real token cost of your MCP servers, skills, and rules across Claude Code, Cursor, Windsurf, Copilot, Codex, and Devin.",
+  "type": "commonjs",
+  "bin": {
+    "agentvitals": "bin/agentvitals.js",
+    "agent-vitals": "bin/agentvitals.js"
+  },
+  "scripts": {
+    "test": "node bin/agentvitals.js --no-probe -q"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "claude-code",
+    "cursor",
+    "ai-agents",
+    "skills",
+    "claude-skills",
+    "context-window",
+    "token-optimization",
+    "lint"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/princejain756/agentvitals.git"
+  },
+  "homepage": "https://github.com/princejain756/agentvitals",
+  "files": [
+    "bin/",
+    "skills/",
+    "README.md",
+    "LICENSE"
+  ]
+}
