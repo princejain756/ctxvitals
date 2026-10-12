@@ -1,6 +1,6 @@
-# agent-xray
+# ctxvitals
 
-[![npm](https://img.shields.io/npm/v/agent-xray)](https://www.npmjs.com/package/agent-xray)
+[![npm](https://img.shields.io/npm/v/ctxvitals)](https://www.npmjs.com/package/ctxvitals)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 **A Lighthouse for your AI agent stack.** One command measures what every MCP
@@ -8,18 +8,18 @@ server, skill, command, and rules file actually costs you in tokens — before
 your agent reads a single message.
 
 ```
-npx agent-xray
+npx ctxvitals
 ```
 
 ## The problem this answers
 
 People running 15+ MCP servers can burn **60,000+ tokens per turn** on tool
 schemas alone. Until now the only way to find out was grepping JSONL session
-logs and guessing. agent-xray launches each stdio MCP server itself, reads the
+logs and guessing. ctxvitals launches each stdio MCP server itself, reads the
 real `tools/list` response, and prints the actual bill:
 
 ```
-AGENT X-RAY v0.1.0 · Princes-MacBook-Pro-2095 · 2026-10-12
+CTX VITALS v0.1.0 · Princes-MacBook-Pro-2095 · 2026-10-12
 ══════════════════════════════════════════════════════════
 GRADE: F (1/100)
 
@@ -52,7 +52,7 @@ prompt one.
 
 The `--html` flag produces a shareable report card ([demo.html](demo.html)):
 
-![agent-xray report card](demo.png)
+![ctxvitals report card](demo.png)
 
 ## What it checks
 
@@ -73,11 +73,11 @@ current directory. Zero dependencies, Node 18+.
 ## Usage
 
 ```bash
-npx agent-xray              # full audit: discovery + live MCP probing
-npx agent-xray --no-probe   # static only, no servers launched
-npx agent-xray --json       # machine-readable output
-npx agent-xray --html report.html   # shareable HTML report card
-npx agent-xray --badge      # README badge markdown with your grade
+npx ctxvitals              # full audit: discovery + live MCP probing
+npx ctxvitals --no-probe   # static only, no servers launched
+npx ctxvitals --json       # machine-readable output
+npx ctxvitals --html report.html   # shareable HTML report card
+npx ctxvitals --badge      # README badge markdown with your grade
 ```
 
 Probing runs the exact `command`+`args` from your own MCP config — the same
@@ -87,7 +87,7 @@ thing your agent client does on every launch. Nothing else is executed.
 ## The badge
 
 ```
-[![Agent X-Ray: A](https://img.shields.io/badge/agent_xray-A%2098%2F100-brightgreen)](https://github.com/princejain756/agent-xray)
+[![CTX Vitals: A](https://img.shields.io/badge/ctxvitals-A%2098%2F100-brightgreen)](https://github.com/princejain756/ctxvitals)
 ```
 
 Put it in your MCP server or skill-pack README so users see what your tool
@@ -95,12 +95,12 @@ costs before they install it. That's the point.
 
 ## Also installable as a skill
 
-This repo ships `skills/agent-xray/SKILL.md`, so Claude Code / Devin / any
+This repo ships `skills/ctxvitals/SKILL.md`, so Claude Code / Devin / any
 SKILL.md-compatible agent can run the audit itself:
 
 ```
-git clone https://github.com/princejain756/agent-xray
-cp -r agent-xray/skills/agent-xray ~/.claude/skills/
+git clone https://github.com/princejain756/ctxvitals
+cp -r ctxvitals/skills/ctxvitals ~/.claude/skills/
 # then ask your agent: "audit my agent stack"
 ```
 
@@ -110,7 +110,7 @@ cp -r agent-xray/skills/agent-xray ~/.claude/skills/
 
 Deductions come from measured numbers, not vibes: context bill size, server
 count past 10, security flags by severity, unpinned packages, broken configs.
-The scoring is in `bin/agent-xray.js` — read it, argue with it, PR it.
+The scoring is in `bin/ctxvitals.js` — read it, argue with it, PR it.
 
 ## Roadmap
 

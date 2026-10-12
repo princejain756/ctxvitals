@@ -1,23 +1,23 @@
 ---
-name: agent-xray
+name: ctxvitals
 description: Audit the user's AI agent stack — measure real token cost of MCP servers (via live tools/list probing), skills, rules, commands, and hooks; flag security issues, duplicates, and stale configs; output an A–F grade. Use when the user asks to audit their agent setup, check MCP token cost, find context bloat, scan skills for security issues, or asks "what is my agent costing me".
 ---
 
-# agent-xray
+# ctxvitals
 
 Run the vitals check on this machine's agent stack.
 
 ## Usage
 
 ```bash
-npx agent-xray            # full audit with live MCP probing
-npx agent-xray --no-probe # static only
-npx agent-xray --json     # machine-readable
-npx agent-xray --html report.html
+npx ctxvitals            # full audit with live MCP probing
+npx ctxvitals --no-probe # static only
+npx ctxvitals --json     # machine-readable
+npx ctxvitals --html report.html
 ```
 
 If `npx` is unavailable, run the repo directly:
-`node <repo>/bin/agent-xray.js`.
+`node <repo>/bin/ctxvitals.js`.
 
 ## Reading the output
 
