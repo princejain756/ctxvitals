@@ -4,7 +4,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
-const { spawn } = require('node:child_process');
+const { spawn, spawnSync } = require('node:child_process');
 
 const VERSION = require('../package.json').version;
 const HOME = os.homedir();
@@ -252,7 +252,9 @@ function probeOne(def, timeoutMs = 10000) {
           clearTimeout(timer);
           const tools = msg.result.tools || [];
           const schemaBytes = Buffer.byteLength(JSON.stringify(tools));
-          done({ ok: true, tools: tools.length, schemaBytes, tokens: Math.ceil(schemaBytes / 4) });
+          const topTools = tools.map(t => ({ name: t.name || '?', tokens: Math.ceil(Buffer.byteLength(JSON.stringify(t)) / 4) }))
+            .sort((a, b) => b.tokens - a.tokens).slice(0, 8);
+          done({ ok: true, tools: tools.length, schemaBytes, tokens: Math.ceil(schemaBytes / 4), topTools });
           return;
         }
       }
@@ -272,6 +274,17 @@ async function probeAll(mcps, concurrency = 4) {
     }
   });
   await Promise.all(workers);
+}
+
+// resolve which binary actually answers a stdio MCP registration
+function resolveCmdPath(cmd) {
+  if (!cmd) return '';
+  if (cmd.includes('/') || cmd.includes('\\')) return cmd;
+  try {
+    const tool = process.platform === 'win32' ? 'where' : 'which';
+    const out = spawnSync(tool, [cmd], { encoding: 'utf8', timeout: 5000 });
+    return (out.stdout || '').split('\n')[0].trim();
+  } catch { return ''; }
 }
 
 // ---------- security audit ----------
@@ -345,8 +358,27 @@ function auditMcps(mcps) {
   for (const m of mcps) {
     const sig = m.probe?.ok ? `p:${m.probe.tools}:${m.probe.schemaBytes}` : `c:${m.command}|${(m.args || []).join(' ')}`;
     if (sig === 'c:|' || sig === 'c:undefined|') continue;
-    if (sigs.has(sig)) flags.push({ sev: 'low', where: 'mcp:' + m.name, why: `duplicate of mcp:${sigs.get(sig)} — paying schema cost twice` });
-    else sigs.set(sig, m.name);
+    if (sigs.has(sig)) {
+      const first = sigs.get(sig);
+      const paths = first.resolvedPath && m.resolvedPath && first.resolvedPath !== m.resolvedPath
+        ? ` — resolves to different binaries: ${first.resolvedPath} vs ${m.resolvedPath}`
+        : m.resolvedPath ? ` — resolves to ${m.resolvedPath}` : '';
+      flags.push({ sev: 'low', where: 'mcp:' + m.name, why: `duplicate of mcp:${first.name} — paying schema cost twice${paths}` });
+    }
+    else sigs.set(sig, m);
+  }
+  // name collisions: same server name in different configs resolving to different binaries —
+  // which one actually answers the call depends on the client's load order
+  const byName = new Map();
+  for (const m of mcps) {
+    if (!byName.has(m.name)) byName.set(m.name, []);
+    byName.get(m.name).push(m);
+  }
+  for (const [name, group] of byName) {
+    const paths = new Set(group.map(g => g.resolvedPath || g.command).filter(Boolean));
+    if (paths.size > 1) {
+      flags.push({ sev: 'medium', where: 'mcp:' + name, why: `registered ${group.length}× resolving to different binaries (${[...paths].join(' vs ')}) — which one wins depends on load order` });
+    }
   }
   return flags;
 }
@@ -406,6 +438,13 @@ function renderTerminal(rep, g) {
     if (rep.security.length > 15) L.push(`  ${C.dim}… ${rep.security.length - 15} more flags${C.reset}`);
     L.push('');
   }
+  if (rep.toolRows?.length) {
+    L.push(`${C.bold}BIGGEST TOOLS${C.reset} ${C.dim}— per-tool schema cost, prune from the top${C.reset}`);
+    for (const t of rep.toolRows.slice(0, 8)) {
+      L.push(`  ${C.cyan}${fmt(t.tokens).padStart(7)}${C.reset} tok  ${t.label}`);
+    }
+    L.push('');
+  }
   L.push(`${C.bold}TOP OFFENDERS${C.reset}`);
   rep.costRows.slice(0, 3).forEach((r, i) => L.push(`  ${i + 1}. ${r.label} — ${fmt(r.tokens)} tok`));
   L.push('');
@@ -419,6 +458,7 @@ function renderHtml(rep, g) {
   const color = BADGE_COLOR[g.letter] === 'brightgreen' ? '#2ea043' : BADGE_COLOR[g.letter];
   const rows = rep.costRows.map(r => `<tr><td class="n">${fmt(r.tokens)}</td><td>${esc(r.label)}</td><td>${r.probed ? 'probed' : 'static'}</td></tr>`).join('');
   const secs = rep.security.map(f => `<tr><td class="${f.sev}">${f.sev.toUpperCase()}</td><td>${esc(f.where)}</td><td>${esc(f.why)}</td></tr>`).join('');
+  const toolRows = (rep.toolRows || []).map(t => `<tr><td class="n">${fmt(t.tokens)}</td><td>${esc(t.label)}</td></tr>`).join('');
   return `<!doctype html><meta charset="utf-8"><title>CTX Vitals — ${g.letter}</title>
 <style>body{font:15px/1.5 -apple-system,system-ui,sans-serif;max-width:760px;margin:40px auto;padding:0 20px;color:#1c1c1e}
 h1{font-size:20px}.grade{font-size:64px;font-weight:700;color:${color};margin:8px 0}.grid{display:flex;gap:24px;align-items:center}
@@ -430,6 +470,7 @@ table{border-collapse:collapse;width:100%;margin:12px 0}td{padding:4px 8px;borde
 <div class="total">${fmt(rep.totalAlwaysTokens)} tokens burned every turn</div>
 <div class="meta">${rep.skillCount} skills · ${rep.mcpCount} MCP servers · ${rep.commandCount} commands · ${rep.agentCount} agents · ${rep.ruleCount} rules</div></div></div>
 <h3>Context bill</h3><table><tr><th></th><th align="left">item</th><th align="left">measured</th></tr>${rows}</table>
+${toolRows ? `<h3>Biggest tools</h3><table>${toolRows}</table>` : ''}
 ${secs ? `<h3>Security flags</h3><table>${secs}</table>` : '<h3>Security flags</h3><p>none</p>'}
 <p class="meta">generated by <a href="https://github.com/princejain756/ctxvitals">ctxvitals</a> — run yours: <code>npx ctxvitals</code></p>`;
 }
@@ -437,6 +478,7 @@ ${secs ? `<h3>Security flags</h3><table>${secs}</table>` : '<h3>Security flags</
 // ---------- main ----------
 (async () => {
   const inv = collectInventory();
+  for (const m of inv.mcps) if (m.command) m.resolvedPath = resolveCmdPath(m.command);
 
   if (!opt.noProbe) {
     const probeTargets = inv.mcps.filter(m => m.command && !m.url);
@@ -459,6 +501,10 @@ ${secs ? `<h3>Security flags</h3><table>${secs}</table>` : '<h3>Security flags</
   costRows.length = 0; costRows.push(...shown);
   costRows.sort((a, b) => b.tokens - a.tokens);
 
+  const toolRows = [];
+  for (const m of inv.mcps) for (const t of m.probe?.topTools || []) toolRows.push({ label: `${m.name}/${t.name}`, tokens: t.tokens });
+  toolRows.sort((a, b) => b.tokens - a.tokens);
+
   const rep = {
     date: new Date().toISOString().slice(0, 10),
     host: os.hostname(),
@@ -477,7 +523,8 @@ ${secs ? `<h3>Security flags</h3><table>${secs}</table>` : '<h3>Security flags</
     failedProbes: inv.mcps.filter(m => m.probe && !m.probe.ok && m.probe.reason !== 'remote').length,
     security,
     broken: inv.broken || [],
-    mcps: inv.mcps.map(m => ({ name: m.name, source: m.source, probe: m.probe })),
+    mcps: inv.mcps.map(m => ({ name: m.name, source: m.source, resolvedPath: m.resolvedPath, probe: m.probe })),
+    toolRows: toolRows.slice(0, 10),
   };
 
   const g = grade(rep);

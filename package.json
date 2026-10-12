@@ -1,6 +1,6 @@
 {
   "name": "ctxvitals",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Vitals check for your AI agent stack: measures the real token cost of your MCP servers, skills, and rules across Claude Code, Cursor, Windsurf, Copilot, Codex, and Devin.",
   "type": "commonjs",
   "bin": {
