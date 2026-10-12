@@ -6,7 +6,7 @@ const path = require('node:path');
 const os = require('node:os');
 const { spawn } = require('node:child_process');
 
-const VERSION = '0.1.0';
+const VERSION = require('../package.json').version;
 const HOME = os.homedir();
 const TOK = (s) => Math.ceil(Buffer.byteLength(String(s || ''), 'utf8') / 4);
 
