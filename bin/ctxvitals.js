@@ -422,7 +422,8 @@ function renderTerminal(rep, g) {
   }
   if (rep.costRows.length > rows.length) L.push(`  ${C.dim}… ${rep.costRows.length - rows.length} more${C.reset}`);
   L.push(`  ${'─'.repeat(50)}`);
-  L.push(`  ${C.bold}${fmt(rep.totalAlwaysTokens).padStart(7)}${C.reset} ${C.bold}tokens every turn${C.reset}`);
+  L.push(`  ${C.bold}${fmt(rep.totalAlwaysTokens).padStart(7)}${C.reset} ${C.bold}tokens every turn${C.reset} ${C.dim}(context window footprint — caching doesn't shrink it)${C.reset}`);
+  L.push(`  ${C.dim}${fmt(rep.cachedAdjustedTokens).padStart(7)} est. billed/turn if provider caches schemas (≈10% cache-read)${C.reset}`);
   L.push('');
   L.push(`${C.bold}INVENTORY${C.reset}`);
   L.push(`  skills ${rep.skillCount} (${fmt(rep.skillAlwaysTokens)} tok always) · commands ${rep.commandCount} · agents ${rep.agentCount}`);
@@ -468,6 +469,7 @@ table{border-collapse:collapse;width:100%;margin:12px 0}td{padding:4px 8px;borde
 <h1>CTX Vitals</h1><div class="meta">${esc(os.hostname().split('.')[0])} · ${rep.date} · ctxvitals ${VERSION}</div>
 <div class="grid"><div class="grade">${g.letter}</div><div><div class="total">${g.score}/100</div>
 <div class="total">${fmt(rep.totalAlwaysTokens)} tokens burned every turn</div>
+<div class="meta">context window footprint. est. billed with prompt caching: ~${fmt(rep.cachedAdjustedTokens)}/turn (≈10% cache-read, provider-dependent)</div>
 <div class="meta">${rep.skillCount} skills · ${rep.mcpCount} MCP servers · ${rep.commandCount} commands · ${rep.agentCount} agents · ${rep.ruleCount} rules</div></div></div>
 <h3>Context bill</h3><table><tr><th></th><th align="left">item</th><th align="left">measured</th></tr>${rows}</table>
 ${toolRows ? `<h3>Biggest tools</h3><table>${toolRows}</table>` : ''}
@@ -505,6 +507,9 @@ ${secs ? `<h3>Security flags</h3><table>${secs}</table>` : '<h3>Security flags</
   for (const m of inv.mcps) for (const t of m.probe?.topTools || []) toolRows.push({ label: `${m.name}/${t.name}`, tokens: t.tokens });
   toolRows.sort((a, b) => b.tokens - a.tokens);
 
+  // cache-adjusted estimate: providers with prompt caching re-bill stable
+  // prefix content (tool schemas, system prompt) at ~10% after first turn.
+  // window footprint stays the honest number; this is the spend estimate.
   const rep = {
     date: new Date().toISOString().slice(0, 10),
     host: os.hostname(),
@@ -527,6 +532,7 @@ ${secs ? `<h3>Security flags</h3><table>${secs}</table>` : '<h3>Security flags</
     toolRows: toolRows.slice(0, 10),
   };
 
+  rep.cachedAdjustedTokens = Math.ceil(rep.totalAlwaysTokens * 0.1);
   const g = grade(rep);
   rep.grade = g;
 
