@@ -1,5 +1,7 @@
 # ctxvitals
 
+![ctxvitals — an ECG for your agent stack](hero.png)
+
 [![npm](https://img.shields.io/npm/v/ctxvitals)](https://www.npmjs.com/package/ctxvitals)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
