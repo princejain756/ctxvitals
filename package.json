@@ -1,14 +1,14 @@
 {
-  "name": "agentvitals",
+  "name": "agent-xray",
   "version": "0.1.0",
   "description": "Vitals check for your AI agent stack: measures the real token cost of your MCP servers, skills, and rules across Claude Code, Cursor, Windsurf, Copilot, Codex, and Devin.",
   "type": "commonjs",
   "bin": {
-    "agentvitals": "bin/agentvitals.js",
-    "agent-vitals": "bin/agentvitals.js"
+    "agent-xray": "bin/agent-xray.js",
+    "agentxray": "bin/agent-xray.js"
   },
   "scripts": {
-    "test": "node bin/agentvitals.js --no-probe -q"
+    "test": "node bin/agent-xray.js --no-probe -q"
   },
   "keywords": [
     "mcp",
@@ -28,9 +28,9 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/princejain756/agentvitals.git"
+    "url": "https://github.com/princejain756/agent-xray.git"
   },
-  "homepage": "https://github.com/princejain756/agentvitals",
+  "homepage": "https://github.com/princejain756/agent-xray",
   "files": [
     "bin/",
     "skills/",
