@@ -190,12 +190,24 @@ function collectInventory() {
     if (!fs.existsSync(cfgPath)) continue;
     if (kind === 'toml') {
       const text = fs.readFileSync(cfgPath, 'utf8');
-      for (const m of text.matchAll(/\[mcp_servers\.([^\]]+)\]([\s\S]*?)(?=\[|$)/g)) {
+      // strip comment lines so commented-out servers don't count
+      const clean = text.split('\n').filter(l => !l.trimStart().startsWith('#')).join('\n');
+      for (const m of clean.matchAll(/\[mcp_servers\.([^\]]+)\]([\s\S]*?)(?=\n\[|$)/g)) {
         const name = m[1].trim();
-        if (mcpSeen.has(name)) continue;
-        mcpSeen.add(name);
+        // [mcp_servers.X.env] is the env block of server X, not a server
+        if (name.endsWith('.env')) {
+          const base = name.slice(0, -4);
+          const target = items.mcps.find(s => s.name === base && s.source === source);
+          if (target) {
+            for (const kv of m[2].matchAll(/([A-Z_][A-Z0-9_]*)\s*=\s*"([^"]*)"/g)) target.env[kv[1]] = kv[2];
+          }
+          continue;
+        }
+        if (mcpSeen.has(source + name)) continue;
+        mcpSeen.add(source + name);
         const cmd = m[2].match(/command\s*=\s*"([^"]+)"/);
-        items.mcps.push({ name, source, command: cmd ? cmd[1] : '', args: (m[2].match(/args\s*=\s*\[([^\]]*)\]/)?.[1] || '').split(',').map(s => s.trim().replace(/"/g, '')).filter(Boolean), env: {} });
+        const url = m[2].match(/url\s*=\s*"([^"]+)"/);
+        items.mcps.push({ name, source, command: cmd ? cmd[1] : '', args: (m[2].match(/args\s*=\s*\[([^\]]*)\]/)?.[1] || '').split(',').map(s => s.trim().replace(/"/g, '')).filter(Boolean), env: {}, url: url ? url[1] : '' });
       }
       continue;
     }
@@ -264,12 +276,51 @@ function probeOne(def, timeoutMs = 10000) {
   });
 }
 
+// remote probe: Streamable HTTP transport (POST JSON-RPC to the url,
+// responses may come back as JSON or SSE-wrapped). legacy SSE-only
+// servers get marked rather than fully probed.
+async function probeRemote(m, timeoutMs = 12000) {
+  const baseHeaders = { 'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream', ...(m.raw?.headers || {}) };
+  let sessionId = null;
+  const parseSse = (text) => {
+    for (const line of text.split('\n')) {
+      const l = line.trim();
+      if (l.startsWith('data:')) { try { return JSON.parse(l.slice(5)); } catch { } }
+    }
+    return null;
+  };
+  const post = async (msg) => {
+    const h = { ...baseHeaders };
+    if (sessionId) h['Mcp-Session-Id'] = sessionId;
+    const res = await fetch(m.url, { method: 'POST', headers: h, body: JSON.stringify(msg), signal: AbortSignal.timeout(timeoutMs) });
+    const sid = res.headers.get('mcp-session-id');
+    if (sid) sessionId = sid;
+    if (res.status === 405) return { __sse405: true };
+    const text = await res.text();
+    try { return JSON.parse(text); } catch { return parseSse(text); }
+  };
+  try {
+    const init = await post({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'ctxvitals', version: VERSION } } });
+    if (init?.__sse405) return { ok: false, reason: 'remote-sse-only (legacy transport)' };
+    if (!init?.result) return { ok: false, reason: 'remote-no-response' };
+    await post({ jsonrpc: '2.0', method: 'notifications/initialized' });
+    const list = await post({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} });
+    const tools = list?.result?.tools;
+    if (!tools) return { ok: false, reason: 'remote-no-tools' };
+    const schemaBytes = Buffer.byteLength(JSON.stringify(tools));
+    const topTools = tools.map(t => ({ name: t.name || '?', tokens: Math.ceil(Buffer.byteLength(JSON.stringify(t)) / 4) })).sort((a, b) => b.tokens - a.tokens).slice(0, 8);
+    return { ok: true, remote: true, tools: tools.length, schemaBytes, tokens: Math.ceil(schemaBytes / 4), topTools };
+  } catch (e) {
+    return { ok: false, reason: 'remote-' + (/abort|timeout/i.test(e.name) ? 'timeout' : 'unreachable') };
+  }
+}
+
 async function probeAll(mcps, concurrency = 4) {
   const queue = [...mcps];
   const workers = Array.from({ length: concurrency }, async () => {
     while (queue.length) {
       const m = queue.shift();
-      if (m.url) { m.probe = { ok: false, reason: 'remote' }; continue; }
+      if (m.url) { m.probe = await probeRemote(m); continue; }
       m.probe = await probeOne(m);
     }
   });
@@ -483,7 +534,7 @@ ${secs ? `<h3>Security flags</h3><table>${secs}</table>` : '<h3>Security flags</
   for (const m of inv.mcps) if (m.command) m.resolvedPath = resolveCmdPath(m.command);
 
   if (!opt.noProbe) {
-    const probeTargets = inv.mcps.filter(m => m.command && !m.url);
+    const probeTargets = inv.mcps.filter(m => m.command || m.url);
     if (probeTargets.length && !opt.json && !opt.quiet) process.stderr.write(`probing ${probeTargets.length} MCP servers…\n`);
     await probeAll(probeTargets);
   }
@@ -492,9 +543,9 @@ ${secs ? `<h3>Security flags</h3><table>${secs}</table>` : '<h3>Security flags</
 
   const costRows = [];
   for (const m of inv.mcps) {
-    if (m.probe?.ok) costRows.push({ label: `MCP ${m.name} (${m.probe.tools} tools)`, tokens: m.probe.tokens, probed: true });
-    else if (m.url) costRows.push({ label: `MCP ${m.name} (remote)`, tokens: 0, probed: null });
+    if (m.probe?.ok) costRows.push({ label: `MCP ${m.name} (${m.probe.tools} tools${m.probe.remote ? ', remote' : ''})`, tokens: m.probe.tokens, probed: true });
     else if (m.probe) costRows.push({ label: `MCP ${m.name} (${m.probe.reason})`, tokens: 0, probed: null });
+    else if (m.url) costRows.push({ label: `MCP ${m.name} (remote)`, tokens: 0, probed: null });
   }
   for (const r of inv.rules) costRows.push({ label: r.name + ' (rule)', tokens: r.alwaysTokens, probed: false });
   if (inv.skills.length) costRows.push({ label: `skill descriptions ×${inv.skills.length}`, tokens: inv.skills.reduce((a, s) => a + s.alwaysTokens, 0), probed: false });
@@ -524,8 +575,9 @@ ${secs ? `<h3>Security flags</h3><table>${secs}</table>` : '<h3>Security flags</
     ruleCount: inv.rules.length,
     mcpCount: inv.mcps.length,
     probedOk: inv.mcps.filter(m => m.probe?.ok).length,
-    remoteCount: inv.mcps.filter(m => m.probe?.reason === 'remote').length,
-    failedProbes: inv.mcps.filter(m => m.probe && !m.probe.ok && m.probe.reason !== 'remote').length,
+    remoteCount: inv.mcps.filter(m => m.url).length,
+    remoteProbedOk: inv.mcps.filter(m => m.url && m.probe?.ok).length,
+    failedProbes: inv.mcps.filter(m => m.probe && !m.probe.ok).length,
     security,
     broken: inv.broken || [],
     mcps: inv.mcps.map(m => ({ name: m.name, source: m.source, resolvedPath: m.resolvedPath, probe: m.probe })),

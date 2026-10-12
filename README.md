@@ -15,8 +15,9 @@ npx ctxvitals
 
 People running 15+ MCP servers can burn **60,000+ tokens per turn** on tool
 schemas alone. Until now the only way to find out was grepping JSONL session
-logs and guessing. ctxvitals launches each stdio MCP server itself, reads the
-real `tools/list` response, and prints the actual bill:
+logs and guessing. ctxvitals launches each stdio MCP server itself and calls
+remote HTTP servers over Streamable HTTP, reads the real `tools/list`
+response, and prints the actual bill:
 
 ```
 CTX VITALS v0.1.0 · Princes-MacBook-Pro-2095 · 2026-10-12
@@ -58,7 +59,7 @@ The `--html` flag produces a shareable report card ([demo.html](demo.html)):
 
 | Surface | How |
 |---|---|
-| **MCP token cost** | Spawns each stdio server and reads the real `tools/list` schema — actual bytes, not estimates |
+| **MCP token cost** | Spawns each stdio server and probes remote HTTP servers (Streamable HTTP transport) for the real `tools/list` schema — actual bytes, not estimates |
 | **Skills** | Counts always-loaded frontmatter tokens vs on-trigger body tokens |
 | **Rules files** | CLAUDE.md / AGENTS.md / GEMINI.md / .cursorrules / .mdc — always in context |
 | **Security** | curl-pipe-sh, prompt-injection phrases, hardcoded secrets, exfil patterns, unpinned packages, plaintext keys in MCP env, non-TLS remote servers |
