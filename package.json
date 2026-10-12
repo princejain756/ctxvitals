@@ -1,11 +1,11 @@
 {
   "name": "ctxvitals",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Vitals check for your AI agent stack: measures the real token cost of your MCP servers, skills, and rules across Claude Code, Cursor, Windsurf, Copilot, Codex, and Devin.",
   "type": "commonjs",
   "bin": {
     "ctxvitals": "bin/ctxvitals.js",
-    "ctxvitals": "bin/ctxvitals.js"
+    "ctx-vitals": "bin/ctxvitals.js"
   },
   "scripts": {
     "test": "node bin/ctxvitals.js --no-probe -q"
