@@ -22,36 +22,45 @@ remote HTTP servers over Streamable HTTP, reads the real `tools/list`
 response, and prints the actual bill:
 
 ```
-CTX VITALS v0.1.0 · Princes-MacBook-Pro-2095 · 2026-10-12
+CTX VITALS v0.4.0 · Princes-MacBook-Pro-2095 · 2026-10-18
 ══════════════════════════════════════════════════════════
-GRADE: F (1/100)
+GRADE: F (0/100)
 
 CONTEXT BILL — tokens burned before the first message
-   39,402 tok  skill descriptions ×901                static
+   51,940 tok  skill descriptions ×1002               static
    26,487 tok  MCP claude-code (20 tools)             probed
-    6,597 tok  MCP chrome-devtools (30 tools)         probed
-    4,480 tok  AGENTS.md (rule)                       static
+    7,341 tok  MCP chrome-devtools (32 tools)         probed
+    7,341 tok  MCP chrome-devtools (32 tools)         probed
+    5,037 tok  AGENTS.md (rule)                       static
+    4,035 tok  MCP blender (9 tools)                  probed
     4,035 tok  MCP blender (9 tools)                  probed
     3,279 tok  MCP hostinger-vps (14 tools)           probed
     3,279 tok  MCP server-31-97-202 (14 tools)        probed
     3,279 tok  MCP local-filesystem (14 tools)        probed
-    1,052 tok  MCP browsermcp (12 tools)              probed
-      363 tok  MCP brave-search (2 tools)             probed
+    1,306 tok  MCP context7 (2 tools, remote)         probed
+  … 8 more
   ──────────────────────────────────────────────────
-   92,413 tokens every turn
+  127,415 tokens every turn (context window footprint)
+   12,742 est. billed/turn if provider caches schemas
+
+INVENTORY
+  skills 1002 (51,940 tok always) · commands 1 · agents 199
+  mcp servers 16 (14 probed, 1 remote, 2 failed) · hooks 17
 
 SECURITY
-  HIGH    origin/SKILL.md        pipes remote content into a shell
-  HIGH    composio-cli/SKILL.md  pipes remote content into a shell
-  MEDIUM  mcp:claude-code        plaintext secret in config env (ANTHROPIC_API_KEY)
-  MEDIUM  mcp:computer-use       command not found — stale config
-  LOW     mcp:server-31-97-202   duplicate of mcp:hostinger-vps
-  LOW     mcp:local-filesystem   duplicate of mcp:hostinger-vps
+  MEDIUM  improve/SKILL.md         prompt-injection phrase (quoted — verify it is only an example)
+  HIGH    lib/bird_x.py            exfil pattern: touches credential stores and calls the network
+  HIGH    origin/SKILL.md          pipes remote content into a shell
+  HIGH    composio-cli/SKILL.md    pipes remote content into a shell
+  HIGH    scripts/helper.js        exfil pattern: touches credential stores and calls the network
+  MEDIUM  ui-ux-pro-max/SKILL.md   requests elevated privileges
+  … 29 more flags
 ```
 
-Yes, that's a real report from a real machine. Same MCP server installed under
-three names. A plaintext API key in a config file. 92K tokens gone before
-prompt one.
+Yes, that's a real report from a real machine. The same 14-tool MCP server
+mounted under three names. Chrome DevTools and Blender probed twice each.
+127K tokens gone before prompt one — and roughly 12K of actual billed spend
+once provider caching kicks in.
 
 The `--html` flag produces a shareable report card ([demo.html](demo.html)):
 
