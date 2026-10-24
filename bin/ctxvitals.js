@@ -12,19 +12,42 @@ const TOK = (s) => Math.ceil(Buffer.byteLength(String(s || ''), 'utf8') / 4);
 
 // ---------- args ----------
 const args = process.argv.slice(2);
-const opt = {
-  json: args.includes('--json'),
-  noProbe: args.includes('--no-probe'),
-  html: getVal('--html'),
-  badge: args.includes('--badge'),
-  quiet: args.includes('-q') || args.includes('--quiet'),
-  help: args.includes('-h') || args.includes('--help'),
-};
 function getVal(flag) {
+  const eq = args.find(a => a.startsWith(flag + '='));
+  if (eq) return eq.slice(flag.length + 1);
   const i = args.indexOf(flag);
   if (i === -1) return null;
   const v = args[i + 1];
+  return v && !v.startsWith('-') ? v : null;
+}
+function getHtmlVal() {
+  const eq = args.find(a => a.startsWith('--html='));
+  if (eq) return eq.slice('--html='.length) || 'ctxvitals-report.html';
+  const i = args.indexOf('--html');
+  if (i === -1) return null;
+  const v = args[i + 1];
   return v && !v.startsWith('-') ? v : 'ctxvitals-report.html';
+}
+const maxTokensRaw = getVal('--max-tokens');
+const minGradeRaw = getVal('--min-grade');
+const opt = {
+  json: args.includes('--json'),
+  noProbe: args.includes('--no-probe'),
+  html: getHtmlVal(),
+  badge: args.includes('--badge'),
+  quiet: args.includes('-q') || args.includes('--quiet'),
+  maxTokens: maxTokensRaw !== null ? Number(maxTokensRaw) : null,
+  minGrade: minGradeRaw !== null ? minGradeRaw.trim().toUpperCase() : null,
+  help: args.includes('-h') || args.includes('--help'),
+};
+const GRADE_ORD = { A: 5, B: 4, C: 3, D: 2, F: 1 };
+if (opt.maxTokens !== null && (!Number.isFinite(opt.maxTokens) || opt.maxTokens < 0)) {
+  console.error('ctxvitals: --max-tokens requires a non-negative number');
+  process.exit(2);
+}
+if (opt.minGrade !== null && !(opt.minGrade in GRADE_ORD)) {
+  console.error('ctxvitals: --min-grade must be one of A, B, C, D, F');
+  process.exit(2);
 }
 
 if (opt.help) {
@@ -37,6 +60,8 @@ usage: ctxvitals [options]
   --json                 machine-readable report to stdout
   --html [file]          write a shareable HTML report card
   --badge                print README badge markdown with your grade
+  --max-tokens <N>       exit 1 if always-on tokens exceed N
+  --min-grade <A-F>      exit 1 if grade is worse than <A-F>
   -q, --quiet            skip the terminal report
   -h, --help             this help
 
@@ -62,6 +87,8 @@ const MCP_CONFIGS = [
   ['claude-code', path.join(HOME, '.claude.json'), 'json.mcpServers'],
   ['cursor', path.join(HOME, '.cursor/mcp.json'), 'json.mcpServers'],
   ['windsurf', path.join(HOME, '.codeium/windsurf/mcp_config.json'), 'json.mcpServers'],
+  ['antigravity', path.join(HOME, '.gemini/antigravity/mcp_config.json'), 'json.mcpServers'],
+  ['gemini-cli', path.join(HOME, '.gemini/settings.json'), 'json.mcpServers'],
   ['claude-desktop', path.join(HOME, 'Library/Application Support/Claude/claude_desktop_config.json'), 'json.mcpServers'],
   ['project', path.join(process.cwd(), '.mcp.json'), 'json.mcpServers'],
   ['project-vscode', path.join(process.cwd(), '.vscode/mcp.json'), 'json.servers'],
@@ -596,4 +623,15 @@ ${secs ? `<h3>Security flags</h3><table>${secs}</table>` : '<h3>Security flags</
     if (!opt.quiet) console.log(`\nwrote ${opt.html}`);
   }
   if (opt.badge) console.log('\n' + badgeMd(g));
+
+  let failedGate = false;
+  if (opt.maxTokens !== null && rep.totalAlwaysTokens > opt.maxTokens) {
+    if (!opt.quiet) console.error(`ctxvitals: always-on tokens (${rep.totalAlwaysTokens}) exceed --max-tokens (${opt.maxTokens})`);
+    failedGate = true;
+  }
+  if (opt.minGrade !== null && GRADE_ORD[g.letter] < GRADE_ORD[opt.minGrade]) {
+    if (!opt.quiet) console.error(`ctxvitals: grade ${g.letter} is below --min-grade ${opt.minGrade}`);
+    failedGate = true;
+  }
+  if (failedGate) process.exit(1);
 })();
